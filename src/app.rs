@@ -39,6 +39,7 @@ pub struct App {
     pub input_buffer: String,
     pub should_quit: bool,
     pub moving_task: Option<Task>,
+    pub my_day_task_order: Vec<u32>, // Task IDs in display order for My Day
 }
 
 impl App {
@@ -64,6 +65,13 @@ impl App {
             storage.save_lists(&lists)?;
         }
 
+        // Initialize My Day task order
+        let my_day_task_order: Vec<u32> = tasks
+            .iter()
+            .filter(|task| task.is_in_my_day || task.is_due_today())
+            .map(|task| task.id)
+            .collect();
+
         Ok(Self {
             state: AppState::ListOverview,
             tasks,
@@ -77,6 +85,7 @@ impl App {
             input_buffer: String::new(),
             should_quit: false,
             moving_task: None,
+            my_day_task_order,
         })
     }
 
@@ -93,10 +102,18 @@ impl App {
     }
 
     pub fn get_my_day_tasks(&self) -> Vec<&Task> {
-        self.tasks
+        let mut tasks: Vec<&Task> = self.tasks
             .iter()
             .filter(|task| task.is_in_my_day || task.is_due_today())
-            .collect()
+            .collect();
+        
+        // Sort by the order in my_day_task_order
+        tasks.sort_by_key(|task| {
+            self.my_day_task_order.iter().position(|&id| id == task.id)
+                .unwrap_or(usize::MAX)
+        });
+        
+        tasks
     }
 
     /// Get the displayable task count that matches the UI structure
@@ -160,6 +177,8 @@ impl App {
 
     pub fn delete_task(&mut self, task_id: u32) -> Result<()> {
         self.tasks.retain(|task| task.id != task_id);
+        // Remove from My Day order if present
+        self.my_day_task_order.retain(|&id| id != task_id);
         self.save_tasks()?;
         Ok(())
     }
@@ -248,7 +267,15 @@ impl App {
         new_task.set_notes(notes);
         
         // Add the new task
+        let new_task_id = new_task.id;
         self.tasks.push(new_task);
+        
+        // Add to My Day order if the new task is due today
+        if next_due_date.date_naive() == chrono::Local::now().date_naive() {
+            if !self.my_day_task_order.contains(&new_task_id) {
+                self.my_day_task_order.push(new_task_id);
+            }
+        }
         
         Ok(())
     }
@@ -257,9 +284,43 @@ impl App {
         self.tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1
     }
 
+    /// Remove duplicate task IDs from my_day_task_order, keeping only the first occurrence
+    fn deduplicate_my_day_order(&mut self) {
+        let mut seen = std::collections::HashSet::new();
+        self.my_day_task_order.retain(|&id| seen.insert(id));
+    }
+
+    pub fn move_task_up_in_my_day(&mut self, task_id: u32) -> Result<()> {
+        // Clean up any duplicate IDs first
+        self.deduplicate_my_day_order();
+        
+        if let Some(pos) = self.my_day_task_order.iter().position(|&id| id == task_id) {
+            if pos > 0 {
+                self.my_day_task_order.swap(pos, pos - 1);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn move_task_down_in_my_day(&mut self, task_id: u32) -> Result<()> {
+        // Clean up any duplicate IDs first
+        self.deduplicate_my_day_order();
+        
+        if let Some(pos) = self.my_day_task_order.iter().position(|&id| id == task_id) {
+            if pos < self.my_day_task_order.len() - 1 {
+                self.my_day_task_order.swap(pos, pos + 1);
+            }
+        }
+        Ok(())
+    }
+
     pub fn add_task_to_my_day(&mut self, task_id: u32) -> Result<()> {
         if let Some(task) = self.tasks.iter_mut().find(|t| t.id == task_id) {
             task.add_to_my_day();
+            // Add to My Day order if not already present
+            if !self.my_day_task_order.contains(&task_id) {
+                self.my_day_task_order.push(task_id);
+            }
             self.save_tasks()?;
         }
         Ok(())
@@ -268,6 +329,8 @@ impl App {
     pub fn remove_task_from_my_day(&mut self, task_id: u32) -> Result<()> {
         if let Some(task) = self.tasks.iter_mut().find(|t| t.id == task_id) {
             task.remove_from_my_day();
+            // Remove from My Day order
+            self.my_day_task_order.retain(|&id| id != task_id);
             self.save_tasks()?;
         }
         Ok(())

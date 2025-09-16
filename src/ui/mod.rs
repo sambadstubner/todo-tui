@@ -78,7 +78,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let help_text = match app.state {
         crate::app::AppState::ListOverview => "[↑↓/jk: Navigate] [gg/G: Top/Bottom] [Enter: Select] [Ctrl+N: New List] [Ctrl+Y: My Day] [Ctrl+Q: Quit]",
         crate::app::AppState::TaskList => "[↑↓/jk: Navigate] [gg/G: Top/Bottom] [Enter: Edit] [Space: Toggle] [Ctrl+N: New] [Ctrl+E: Edit] [Ctrl+V: View Notes] [Ctrl+T: Move] [Del/Backspace: Delete] [Ctrl+D: My Day] [Ctrl+M: My Day] [Esc: Back]",
-        crate::app::AppState::MyDay => "[↑↓/jk: Navigate] [gg/G: Top/Bottom] [Space: Toggle] [Ctrl+V: View Notes] [Ctrl+T: Move] [Ctrl+D: Remove] [Del/Backspace: Delete] [Esc: Back]",
+        crate::app::AppState::MyDay => "[↑↓/jk: Navigate] [gg/G: Top/Bottom] [Space: Toggle] [Ctrl+↑/↓: Reorder] [Ctrl+V: View Notes] [Ctrl+T: Move] [Ctrl+D: Remove] [Del/Backspace: Delete] [Esc: Back]",
         crate::app::AppState::TaskEditor => "[Type: Edit] [Enter: Next/Save] [Esc: Cancel]",
         crate::app::AppState::ListEditor => "[Type: List Name] [Enter: Save] [Esc: Cancel]",
         crate::app::AppState::NoteEditor => "[Type: Edit] [Enter: Save] [Esc: Cancel]",

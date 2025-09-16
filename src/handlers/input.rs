@@ -218,15 +218,29 @@ fn handle_my_day_input(app: &mut App, key: KeyEvent) -> Result<()> {
             app.state = AppState::ListOverview;
             app.selected_task_index = 0;
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Up if !key.modifiers.contains(KeyModifiers::CONTROL) => {
             if app.selected_task_index > 0 {
                 app.selected_task_index -= 1;
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
+        KeyCode::Char('k') => {
+            if app.selected_task_index > 0 {
+                app.selected_task_index -= 1;
+            }
+        }
+        KeyCode::Down if !key.modifiers.contains(KeyModifiers::CONTROL) => {
             let tasks = app.get_my_day_tasks();
             let displayable_count = app.get_displayable_task_count(&tasks);
-            if app.selected_task_index < displayable_count.saturating_sub(1) {
+            // Ensure selection doesn't go out of bounds
+            if displayable_count > 0 && app.selected_task_index < displayable_count.saturating_sub(1) {
+                app.selected_task_index += 1;
+            }
+        }
+        KeyCode::Char('j') => {
+            let tasks = app.get_my_day_tasks();
+            let displayable_count = app.get_displayable_task_count(&tasks);
+            // Ensure selection doesn't go out of bounds
+            if displayable_count > 0 && app.selected_task_index < displayable_count.saturating_sub(1) {
                 app.selected_task_index += 1;
             }
         }
@@ -303,6 +317,30 @@ fn handle_my_day_input(app: &mut App, key: KeyEvent) -> Result<()> {
                 app.delete_task(task_id)?;
                 if app.selected_task_index >= displayable_count.saturating_sub(1) {
                     app.selected_task_index = displayable_count.saturating_sub(2);
+                }
+            }
+        }
+        KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Move selected task up in My Day order
+            let tasks = app.get_my_day_tasks();
+            if let Some(task) = app.get_task_at_display_index(&tasks, app.selected_task_index) {
+                app.move_task_up_in_my_day(task.id)?;
+                // Adjust selection to follow the moved task
+                if app.selected_task_index > 0 {
+                    app.selected_task_index -= 1;
+                }
+            }
+        }
+        KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Move selected task down in My Day order
+            let tasks = app.get_my_day_tasks();
+            let displayable_count = app.get_displayable_task_count(&tasks);
+            if let Some(task) = app.get_task_at_display_index(&tasks, app.selected_task_index) {
+                let task_id = task.id;
+                app.move_task_down_in_my_day(task_id)?;
+                // Adjust selection to follow the moved task
+                if app.selected_task_index < displayable_count.saturating_sub(1) {
+                    app.selected_task_index += 1;
                 }
             }
         }

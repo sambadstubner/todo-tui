@@ -65,20 +65,13 @@ fn draw_my_day_tasks(f: &mut Frame, app: &App, area: Rect) {
     
     // Add active tasks
     for (_i, task) in active_tasks.iter().enumerate() {
-        let style = if task.is_overdue() {
-            if current_index == app.selected_task_index {
-                Style::default().fg(BlulocoTheme::ERROR).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(BlulocoTheme::ERROR)
-            }
-        } else if task.is_due_today() {
-            if current_index == app.selected_task_index {
-                Style::default().fg(BlulocoTheme::WARNING).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(BlulocoTheme::WARNING)
-            }
-        } else if current_index == app.selected_task_index {
+        let style = if current_index == app.selected_task_index {
+            // Selected task is always blue (focus color)
             Style::default().fg(BlulocoTheme::FOCUS).add_modifier(Modifier::BOLD)
+        } else if task.is_overdue() {
+            Style::default().fg(BlulocoTheme::ERROR)
+        } else if task.is_due_today() {
+            Style::default().fg(BlulocoTheme::WARNING)
         } else {
             Style::default().fg(BlulocoTheme::TEXT_PRIMARY)
         };
