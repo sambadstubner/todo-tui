@@ -165,11 +165,96 @@ impl App {
     }
 
     pub fn toggle_task_completion(&mut self, task_id: u32) -> Result<()> {
+        // First, find the task and collect the data we need
+        let (was_completed, has_recurring, task_data) = if let Some(task) = self.tasks.iter().find(|t| t.id == task_id) {
+            let was_completed = task.is_completed;
+            let has_recurring = task.recurring_frequency.is_some();
+            let task_data = if has_recurring {
+                Some((task.title.clone(), task.list_id, task.due_date, task.recurring_frequency.clone(), task.notes.clone()))
+            } else {
+                None
+            };
+            (was_completed, has_recurring, task_data)
+        } else {
+            return Ok(());
+        };
+        
+        // Now toggle the task completion
         if let Some(task) = self.tasks.iter_mut().find(|t| t.id == task_id) {
             task.toggle_completion();
-            self.save_tasks()?;
         }
+        
+        // If task was just completed and has recurring frequency, create a new instance
+        if !was_completed && has_recurring && task_data.is_some() {
+            let (title, list_id, due_date, frequency, notes) = task_data.unwrap();
+            self.create_recurring_task_instance(title, list_id, due_date, frequency, notes)?;
+        }
+        
+        self.save_tasks()?;
         Ok(())
+    }
+
+    fn create_recurring_task_instance(
+        &mut self, 
+        title: String, 
+        list_id: u32, 
+        current_due_date: Option<chrono::DateTime<chrono::Local>>, 
+        frequency: Option<crate::models::RecurringFrequency>, 
+        notes: Option<String>
+    ) -> Result<()> {
+        use chrono::{Datelike, Duration, Local, Weekday};
+        
+        let frequency = frequency.unwrap();
+        let current_due_date = current_due_date.unwrap_or_else(|| Local::now());
+        let mut next_due_date = current_due_date;
+        
+        // Calculate the next due date based on frequency
+        match frequency {
+            crate::models::RecurringFrequency::Daily => {
+                next_due_date = current_due_date + Duration::days(1);
+            }
+            crate::models::RecurringFrequency::Weekdays => {
+                // Find the next weekday (Monday-Friday)
+                loop {
+                    next_due_date = next_due_date + Duration::days(1);
+                    let weekday = next_due_date.weekday();
+                    if weekday != Weekday::Sat && weekday != Weekday::Sun {
+                        break;
+                    }
+                }
+            }
+            crate::models::RecurringFrequency::Weekly => {
+                next_due_date = current_due_date + Duration::weeks(1);
+            }
+            crate::models::RecurringFrequency::Monthly => {
+                // Add one month (approximate)
+                next_due_date = current_due_date + Duration::days(30);
+            }
+            crate::models::RecurringFrequency::Yearly => {
+                // Add one year (approximate)
+                next_due_date = current_due_date + Duration::days(365);
+            }
+        }
+        
+        // Create new task instance
+        let mut new_task = crate::models::Task::new(
+            self.get_next_task_id(),
+            title,
+            list_id,
+        );
+        
+        new_task.set_due_date(Some(next_due_date));
+        new_task.set_recurring_frequency(Some(frequency));
+        new_task.set_notes(notes);
+        
+        // Add the new task
+        self.tasks.push(new_task);
+        
+        Ok(())
+    }
+
+    fn get_next_task_id(&self) -> u32 {
+        self.tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1
     }
 
     pub fn add_task_to_my_day(&mut self, task_id: u32) -> Result<()> {
