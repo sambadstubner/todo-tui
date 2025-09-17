@@ -127,24 +127,22 @@ fn handle_task_list_input(app: &mut App, key: KeyEvent) -> Result<()> {
             let tasks = app.get_current_list_tasks();
             if let Some(task) = app.get_task_at_display_index(&tasks, app.selected_task_index) {
                 let task_id = task.id;
-                let was_completed = task.is_completed;
                 app.toggle_task_completion(task_id)?;
                 
-                // Adjust selection index after toggle
+                // For single task lists, keep selection at 0
                 let new_tasks = app.get_current_list_tasks();
-                let active_tasks: Vec<_> = new_tasks.iter().filter(|t| !t.is_completed).collect();
-                let completed_tasks: Vec<_> = new_tasks.iter().filter(|t| t.is_completed).collect();
+                let displayable_count = app.get_displayable_task_count(&new_tasks);
                 
-                if was_completed {
-                    // Task was completed, now active - find its new position in active tasks
-                    if let Some(new_index) = active_tasks.iter().position(|t| t.id == task_id) {
-                        app.selected_task_index = new_index;
+                if displayable_count == 1 {
+                    app.selected_task_index = 0;
+                } else if displayable_count > 1 {
+                    // Ensure selection stays within bounds for multi-task lists
+                    if app.selected_task_index >= displayable_count {
+                        app.selected_task_index = displayable_count.saturating_sub(1);
                     }
                 } else {
-                    // Task was active, now completed - find its new position in completed tasks
-                    let separator_offset = if !active_tasks.is_empty() && !completed_tasks.is_empty() { 1 } else { 0 };
-                    let new_index = active_tasks.len() + separator_offset + completed_tasks.iter().position(|t| t.id == task_id).unwrap_or(0);
-                    app.selected_task_index = new_index;
+                    // No tasks left
+                    app.selected_task_index = 0;
                 }
             }
         }
@@ -263,24 +261,22 @@ fn handle_my_day_input(app: &mut App, key: KeyEvent) -> Result<()> {
             let tasks = app.get_my_day_tasks();
             if let Some(task) = app.get_task_at_display_index(&tasks, app.selected_task_index) {
                 let task_id = task.id;
-                let was_completed = task.is_completed;
                 app.toggle_task_completion(task_id)?;
                 
-                // Adjust selection index after toggle
+                // For single task lists, keep selection at 0
                 let new_tasks = app.get_my_day_tasks();
-                let active_tasks: Vec<_> = new_tasks.iter().filter(|t| !t.is_completed).collect();
-                let completed_tasks: Vec<_> = new_tasks.iter().filter(|t| t.is_completed).collect();
+                let displayable_count = app.get_displayable_task_count(&new_tasks);
                 
-                if was_completed {
-                    // Task was completed, now active - find its new position in active tasks
-                    if let Some(new_index) = active_tasks.iter().position(|t| t.id == task_id) {
-                        app.selected_task_index = new_index;
+                if displayable_count == 1 {
+                    app.selected_task_index = 0;
+                } else if displayable_count > 1 {
+                    // Ensure selection stays within bounds for multi-task lists
+                    if app.selected_task_index >= displayable_count {
+                        app.selected_task_index = displayable_count.saturating_sub(1);
                     }
                 } else {
-                    // Task was active, now completed - find its new position in completed tasks
-                    let separator_offset = if !active_tasks.is_empty() && !completed_tasks.is_empty() { 1 } else { 0 };
-                    let new_index = active_tasks.len() + separator_offset + completed_tasks.iter().position(|t| t.id == task_id).unwrap_or(0);
-                    app.selected_task_index = new_index;
+                    // No tasks left
+                    app.selected_task_index = 0;
                 }
             }
         }
@@ -324,23 +320,39 @@ fn handle_my_day_input(app: &mut App, key: KeyEvent) -> Result<()> {
             // Move selected task up in My Day order
             let tasks = app.get_my_day_tasks();
             if let Some(task) = app.get_task_at_display_index(&tasks, app.selected_task_index) {
-                app.move_task_up_in_my_day(task.id)?;
-                // Adjust selection to follow the moved task
-                if app.selected_task_index > 0 {
-                    app.selected_task_index -= 1;
+                let task_id = task.id;
+                app.move_task_up_in_my_day(task_id)?;
+                
+                // Update selection to follow the moved task
+                let new_tasks = app.get_my_day_tasks();
+                // Find the display index of the moved task
+                for (display_index, _) in (0..app.get_displayable_task_count(&new_tasks)).enumerate() {
+                    if let Some(task_at_index) = app.get_task_at_display_index(&new_tasks, display_index) {
+                        if task_at_index.id == task_id {
+                            app.selected_task_index = display_index;
+                            break;
+                        }
+                    }
                 }
             }
         }
         KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
             // Move selected task down in My Day order
             let tasks = app.get_my_day_tasks();
-            let displayable_count = app.get_displayable_task_count(&tasks);
             if let Some(task) = app.get_task_at_display_index(&tasks, app.selected_task_index) {
                 let task_id = task.id;
                 app.move_task_down_in_my_day(task_id)?;
-                // Adjust selection to follow the moved task
-                if app.selected_task_index < displayable_count.saturating_sub(1) {
-                    app.selected_task_index += 1;
+                
+                // Update selection to follow the moved task
+                let new_tasks = app.get_my_day_tasks();
+                // Find the display index of the moved task
+                for (display_index, _) in (0..app.get_displayable_task_count(&new_tasks)).enumerate() {
+                    if let Some(task_at_index) = app.get_task_at_display_index(&new_tasks, display_index) {
+                        if task_at_index.id == task_id {
+                            app.selected_task_index = display_index;
+                            break;
+                        }
+                    }
                 }
             }
         }

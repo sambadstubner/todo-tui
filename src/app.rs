@@ -188,7 +188,9 @@ impl App {
         let (was_completed, has_recurring, task_data) = if let Some(task) = self.tasks.iter().find(|t| t.id == task_id) {
             let was_completed = task.is_completed;
             let has_recurring = task.recurring_frequency.is_some();
-            let task_data = if has_recurring {
+            let task_data = if has_recurring && !was_completed {
+                // Only collect data if task is recurring AND currently incomplete
+                // This prevents creating duplicates when uncompleting a recurring task
                 Some((task.title.clone(), task.list_id, task.due_date, task.recurring_frequency.clone(), task.notes.clone()))
             } else {
                 None
@@ -280,20 +282,30 @@ impl App {
         Ok(())
     }
 
-    fn get_next_task_id(&self) -> u32 {
-        self.tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1
+    fn get_next_task_id(&mut self) -> u32 {
+        self.storage.get_next_task_id()
     }
 
-    /// Remove duplicate task IDs from my_day_task_order, keeping only the first occurrence
-    fn deduplicate_my_day_order(&mut self) {
-        let mut seen = std::collections::HashSet::new();
-        self.my_day_task_order.retain(|&id| seen.insert(id));
-    }
 
     pub fn move_task_up_in_my_day(&mut self, task_id: u32) -> Result<()> {
-        // Clean up any duplicate IDs first
-        self.deduplicate_my_day_order();
+        // Find all positions of this task_id (in case of duplicates)
+        let positions: Vec<usize> = self.my_day_task_order
+            .iter()
+            .enumerate()
+            .filter(|(_, &id)| id == task_id)
+            .map(|(pos, _)| pos)
+            .collect();
         
+        // If we have duplicates, remove all but the first occurrence
+        if positions.len() > 1 {
+            for &pos in positions.iter().rev() {
+                if pos != positions[0] {
+                    self.my_day_task_order.remove(pos);
+                }
+            }
+        }
+        
+        // Now move the task up
         if let Some(pos) = self.my_day_task_order.iter().position(|&id| id == task_id) {
             if pos > 0 {
                 self.my_day_task_order.swap(pos, pos - 1);
@@ -303,9 +315,24 @@ impl App {
     }
 
     pub fn move_task_down_in_my_day(&mut self, task_id: u32) -> Result<()> {
-        // Clean up any duplicate IDs first
-        self.deduplicate_my_day_order();
+        // Find all positions of this task_id (in case of duplicates)
+        let positions: Vec<usize> = self.my_day_task_order
+            .iter()
+            .enumerate()
+            .filter(|(_, &id)| id == task_id)
+            .map(|(pos, _)| pos)
+            .collect();
         
+        // If we have duplicates, remove all but the first occurrence
+        if positions.len() > 1 {
+            for &pos in positions.iter().rev() {
+                if pos != positions[0] {
+                    self.my_day_task_order.remove(pos);
+                }
+            }
+        }
+        
+        // Now move the task down
         if let Some(pos) = self.my_day_task_order.iter().position(|&id| id == task_id) {
             if pos < self.my_day_task_order.len() - 1 {
                 self.my_day_task_order.swap(pos, pos + 1);
